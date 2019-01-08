@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 
-if [ -d "venv" ]
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+if [ -d "$DIR/venv" ]
 then
     :
 else
-    virtualenv venv -p python3
+    virtualenv $DIR/venv -p python3
 fi
 
-source venv/bin/activate
+source $DIR/venv/bin/activate
 pip3 install -U pip
-pip3 install -U -r requirements.txt
+pip3 install -U -r $DIR/requirements.txt

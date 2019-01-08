@@ -6,6 +6,10 @@ from wand.image import Image as WImage
 from io import BytesIO
 from glob import glob
 import os
+import sys
+from PyPDF2 import PdfFileReader, PdfFileWriter
+
+script_path = os.path.dirname(os.path.realpath(__file__))
 
 
 def insensitive_glob(pattern):
@@ -39,13 +43,16 @@ def get_abs_path(path):
 
 class Frame(wx.Frame):
     def __init__(
-        self, image, parent=None, id=-1, pos=wx.DefaultPosition,
+        self, filename, parent=None, id=-1, pos=wx.DefaultPosition,
         title='Sort Out Scans'
     ):
+        self.filename = filename
+        self.pdfFile = PdfFileReader(filename, 'r')
         self.LoadHistory()
         self.history_cursor = -1
+        self.page_cursor = 0
         self.history_estimate_latency = 3
-        temp = image.ConvertToBitmap()
+        temp = self.GetCurrentBitmap()
         size = temp.GetWidth(), temp.GetHeight()
         self.col_width = 850
         self.inter_space = 10
@@ -75,6 +82,21 @@ class Frame(wx.Frame):
         )
 
         self.OnEnterPress(None)
+
+    def GetCurrentBitmap(self):
+        if self.pdfFile.getNumPages() == self.page_cursor:
+            self.Close()
+            return None
+        with BytesIO() as bytesio:
+            with WImage(
+                filename='%s[%d]' % (self.filename, self.page_cursor),
+                resolution=60
+            ) as img:
+                img.format = 'jpg'
+                img.save(file=bytesio)
+            bytesio.seek(0)
+            image = wx.Image(bytesio, type=wx.BITMAP_TYPE_JPEG)
+        return image.ConvertToBitmap()
 
     def OnTextChange(self, event):
         self.UpdateView()
@@ -149,7 +171,23 @@ class Frame(wx.Frame):
             self.control.SetValue(self.history[-self.history_cursor-1])
         wx.CallLater(1, self.control.SetInsertionPointEnd)
 
+    def ProcessPage(self):
+        abs_path = get_abs_path(self.control.GetValue())
+        new = PdfFileWriter()
+        if os.path.isfile(abs_path):
+            old = PdfFileReader(abs_path, 'r')
+            for i in range(old.getNumPages()):
+                new.addPage(old.getPage(i))
+        new.addPage(self.pdfFile.getPage(self.page_cursor))
+        with open(abs_path, 'wb') as f:
+            new.write(f)
+        self.page_cursor += 1
+        if self.GetCurrentBitmap() is not None:
+            self.bmp.SetBitmap(self.GetCurrentBitmap())
+
     def OnEnterPress(self, event):
+        if os.path.splitext(self.control.GetValue())[1] == '.pdf':
+            self.ProcessPage()
         self.history_cursor = -1
         if event is not None:
             if self.control.GetValue() in self.history:
@@ -187,12 +225,12 @@ class Frame(wx.Frame):
 
     def LoadHistory(self):
         self.history = []
-        with open('.sos_history', 'r') as f:
+        with open(os.path.join(script_path, '.sos_history'), 'r') as f:
             for line in f.readlines():
                 self.history.append(line.rstrip())
 
     def WriteHistory(self):
-        with open('.sos_history', 'w') as f:
+        with open(os.path.join(script_path, '.sos_history'), 'w') as f:
             for h in self.history:
                 f.write(h)
                 f.write('\n')
@@ -216,18 +254,21 @@ class Frame(wx.Frame):
 
 
 class App(wx.App):
+    def __init__(self, filename):
+        self.filename = filename
+        super(App, self).__init__()
+
     def OnInit(self):
-        with BytesIO() as bytesio:
-            with WImage(filename='Abiturzeugnis.pdf[2]', resolution=60) as img:
-                img.format = 'jpg'
-                img.save(file=bytesio)
-            bytesio.seek(0)
-            self.pdfpageimage = wx.Image(bytesio, type=wx.BITMAP_TYPE_JPEG)
-        self.frame = Frame(self.pdfpageimage)
+        self.frame = Frame(self.filename)
         self.frame.Show()
         self.SetTopWindow(self.frame)
         return True
 
 
-app = App()
-app.MainLoop()
+if __name__ == '__main__':
+    assert(len(sys.argv) == 2)
+    filename = sys.argv[1]
+    assert(os.path.isfile(filename))
+    assert(os.path.splitext(filename)[1].lower() == '.pdf')
+    app = App(filename)
+    app.MainLoop()
