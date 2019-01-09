@@ -8,8 +8,27 @@ from glob import glob
 import os
 import sys
 from PyPDF2 import PdfFileReader, PdfFileWriter
+import re
+import textract
+from shutil import copyfile
+
 
 script_path = os.path.dirname(os.path.realpath(__file__))
+watermarkPdf = PdfFileReader(
+    open(os.path.join(script_path, "sos_watermark.pdf"), "rb")
+)
+
+
+month_names = [
+    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August',
+    'September', 'Oktober', 'November', 'Dezember'
+]
+year_regex = r"((?:19|20|21)\d{2})"
+nbr_month_regex = r"(0?[1-9]|1[0-2])"
+text_month_regex = r"(%s)" % '|'.join(month_names)
+day_regex = r"(0?[1-9]|[1-2][0-9]|3[0-1])"
+date_regex_text = r"%s\. %s %s" % (day_regex, text_month_regex, year_regex)
+date_regex_nbr = r"%s\.%s\.%s" % (day_regex, nbr_month_regex, year_regex)
 
 
 def insensitive_glob(pattern):
@@ -41,22 +60,61 @@ def get_abs_path(path):
     return os.path.expanduser('~/' + path)
 
 
+def get_dates_and_values(text):
+    dates_and_values = []
+    matches = re.finditer(date_regex_text, text, re.MULTILINE)
+    for match in matches:
+        value = (
+            int(match.group(3)) * int(1e4) +
+            (month_names.index(match.group(2)) + 1) * int(1e2) +
+            int(match.group(1))
+        )
+        value = str(value)
+        date = match.group()
+        dates_and_values.append((date, value))
+    matches = re.finditer(date_regex_nbr, text, re.MULTILINE)
+    for match in matches:
+        value = (
+            int(match.group(3)) * int(1e4) +
+            int(match.group(2)) * int(1e2) +
+            int(match.group(1))
+        )
+        value = str(value)
+        date = match.group()
+        dates_and_values.append((date, value))
+    matches = re.finditer(r"[\. ]"+year_regex+r"[\. ]", text, re.MULTILINE)
+    for match in matches:
+        value = match.group(1)
+        dates_and_values.append((value, value))
+    return sorted(dates_and_values, key=lambda x: -int(x[1]))
+
+
 class Frame(wx.Frame):
     def __init__(
         self, filename, parent=None, id=-1, pos=wx.DefaultPosition,
         title='Sort Out Scans'
     ):
+        super(Frame, self).__init__()
         self.filename = filename
-        self.pdfFile = PdfFileReader(filename, 'r')
-        self.LoadHistory()
         self.history_cursor = -1
+        self.date_cursor = -1
         self.page_cursor = 0
         self.history_estimate_latency = 3
-        temp = self.GetCurrentBitmap()
-        size = temp.GetWidth(), temp.GetHeight()
         self.col_width = 850
         self.inter_space = 10
         self.line_height = 30
+        self.pdfFile = PdfFileReader(filename, 'r')
+        self.watermarkedPdfFile = PdfFileWriter()
+
+        extracttext = textract.process(filename).decode('utf-8')
+        self.page_texts = extracttext.split('\f')
+        assert len(self.page_texts[-1]) == 0
+        self.page_texts = self.page_texts[:-1]
+        assert len(self.page_texts) == self.pdfFile.getNumPages()
+
+        self.LoadHistory()
+        temp = self.GetCurrentBitmap()
+        size = temp.GetWidth(), temp.GetHeight()
         wx.Frame.__init__(self, parent, id, title, pos, size)
         self.bmp = wx.StaticBitmap(parent=self, bitmap=temp)
         self.control = wx.TextCtrl(
@@ -76,6 +134,7 @@ class Frame(wx.Frame):
         self.Bind(wx.EVT_TEXT_ENTER, self.OnEnterPress, self.control)
         self.Bind(wx.EVT_TEXT, self.OnTextChange, self.control)
         self.control.Bind(wx.EVT_KEY_DOWN, self.OnKeyPress)
+        self.Bind(wx.EVT_CLOSE, self.OnClose)
 
         self.SetClientSize(
             (size[0] + 2*self.inter_space + self.col_width, size[1])
@@ -98,8 +157,8 @@ class Frame(wx.Frame):
             image = wx.Image(bytesio, type=wx.BITMAP_TYPE_JPEG)
         return image.ConvertToBitmap()
 
-    def OnTextChange(self, event):
-        self.UpdateView()
+    def GetTextOCR(self):
+        return self.page_texts[self.page_cursor]
 
     def UpdateView(self):
         possible_objects = self.GetPossibleFilesystemObjects(
@@ -132,6 +191,17 @@ class Frame(wx.Frame):
                 html_string += '&emsp;'
             html_string = html_string[:-6]
         html_string += '<br><br>'
+        dates_and_values = get_dates_and_values(self.GetTextOCR())
+        counter = 0
+        for date, value in dates_and_values:
+            if counter == self.date_cursor:
+                html_string += '<b>'
+            html_string += value + '&emsp;' + date
+            if counter == self.date_cursor:
+                html_string += '</b>'
+            html_string += '<br>'
+            counter += 1
+        html_string += '<br><br>'
         counter = 0
         for h in self.history[::-1]:
             if counter == self.history_cursor:
@@ -143,6 +213,9 @@ class Frame(wx.Frame):
             counter += 1
         self.html_window.SetPage(html_string)
 
+    def OnTextChange(self, event):
+        self.UpdateView()
+
     def OnKeyPress(self, event):
         if event.GetKeyCode() == wx.WXK_TAB:
             self.OnTabPress(event)
@@ -152,6 +225,10 @@ class Frame(wx.Frame):
             self.OnDownPress(event)
         elif event.GetKeyCode() == wx.WXK_UP:
             self.OnUpPress(event)
+        elif event.GetKeyCode() == wx.WXK_PAGEUP:
+            self.OnPageUpPress(event)
+        elif event.GetKeyCode() == wx.WXK_PAGEDOWN:
+            self.OnPageDownPress(event)
         else:
             event.Skip()
 
@@ -171,25 +248,80 @@ class Frame(wx.Frame):
             self.control.SetValue(self.history[-self.history_cursor-1])
         wx.CallLater(1, self.control.SetInsertionPointEnd)
 
+    def OnPageDownPress(self, event):
+        dates_and_values = get_dates_and_values(self.GetTextOCR())
+        if self.date_cursor == -1:
+            prev_val = ''
+        else:
+            prev_val = dates_and_values[self.date_cursor][1]
+        if len(prev_val) == 8:
+            prev_val += '_'
+        elif len(prev_val) == 4:
+            prev_val += '/'
+        if self.date_cursor < len(dates_and_values) - 1:
+            self.date_cursor += 1
+        new_val = dates_and_values[self.date_cursor][1]
+        if len(new_val) == 8:
+            new_val += '_'
+        elif len(new_val) == 4:
+            new_val += '/'
+        if len(prev_val) == 0:
+            self.control.SetValue(self.control.GetValue() + new_val)
+        else:
+            old_string = self.control.GetValue()
+            self.control.SetValue(old_string.replace(prev_val, new_val))
+        self.UpdateView()
+        wx.CallLater(1, self.control.SetInsertionPointEnd)
+
+    def OnPageUpPress(self, event):
+        dates_and_values = get_dates_and_values(self.GetTextOCR())
+        prev_val = dates_and_values[self.date_cursor][1]
+        if len(prev_val) == 8:
+            prev_val += '_'
+        elif len(prev_val) == 4:
+            prev_val += '/'
+        if self.date_cursor >= 0:
+            self.date_cursor -= 1
+        if self.date_cursor == -1:
+            new_val = ''
+        else:
+            new_val = dates_and_values[self.date_cursor][1]
+        if len(new_val) == 8:
+            new_val += '_'
+        elif len(new_val) == 4:
+            new_val += '/'
+        old_string = self.control.GetValue()
+        self.control.SetValue(old_string.replace(prev_val, new_val))
+        self.UpdateView()
+        wx.CallLater(1, self.control.SetInsertionPointEnd)
+
     def ProcessPage(self):
-        abs_path = get_abs_path(self.control.GetValue())
-        new = PdfFileWriter()
-        if os.path.isfile(abs_path):
-            old = PdfFileReader(abs_path, 'r')
-            for i in range(old.getNumPages()):
-                new.addPage(old.getPage(i))
-        new.addPage(self.pdfFile.getPage(self.page_cursor))
-        with open(abs_path, 'wb') as f:
-            new.write(f)
+        cur_page = self.pdfFile.getPage(self.page_cursor)
+        if os.path.splitext(self.control.GetValue())[1] == '.pdf':
+            abs_path = get_abs_path(self.control.GetValue())
+            new = PdfFileWriter()
+            if os.path.isfile(abs_path):
+                old = PdfFileReader(abs_path, 'r')
+                for i in range(old.getNumPages()):
+                    new.addPage(old.getPage(i))
+            new.addPage(cur_page)
+            os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+            with open(abs_path, 'wb') as f:
+                new.write(f)
+            cur_page.mergePage(watermarkPdf.getPage(0))
+        self.watermarkedPdfFile.addPage(cur_page)
         self.page_cursor += 1
         if self.GetCurrentBitmap() is not None:
             self.bmp.SetBitmap(self.GetCurrentBitmap())
 
     def OnEnterPress(self, event):
-        if os.path.splitext(self.control.GetValue())[1] == '.pdf':
-            self.ProcessPage()
         self.history_cursor = -1
         if event is not None:
+            if (
+                os.path.splitext(self.control.GetValue())[1] == '.pdf' or
+                self.control.GetValue() == ''
+            ):
+                self.ProcessPage()
             if self.control.GetValue() in self.history:
                 del self.history[self.history.index(self.control.GetValue())]
             self.history.append(self.control.GetValue())
@@ -225,9 +357,10 @@ class Frame(wx.Frame):
 
     def LoadHistory(self):
         self.history = []
-        with open(os.path.join(script_path, '.sos_history'), 'r') as f:
-            for line in f.readlines():
-                self.history.append(line.rstrip())
+        if os.path.exists(os.path.join(script_path, '.sos_history')):
+            with open(os.path.join(script_path, '.sos_history'), 'r') as f:
+                for line in f.readlines():
+                    self.history.append(line.rstrip())
 
     def WriteHistory(self):
         with open(os.path.join(script_path, '.sos_history'), 'w') as f:
@@ -236,6 +369,8 @@ class Frame(wx.Frame):
                 f.write('\n')
 
     def GetHistoryEstimate(self):
+        if len(self.history) < self.history_estimate_latency:
+            return ''
         history_estimate = self.history[-1]
         for i in range(self.history_estimate_latency):
             n = start_match_len(history_estimate, self.history[-i-1])
@@ -251,6 +386,18 @@ class Frame(wx.Frame):
             for f in insensitive_glob(pattern)
         ]
         return sorted(result, key=lambda s: os.path.basename(s).lower())
+
+    def OnClose(self, event):
+        print('Finishung up and closing app...')
+        while self.page_cursor < self.pdfFile.getNumPages():
+            self.watermarkedPdfFile.addPage(
+                self.pdfFile.getPage(self.page_cursor)
+            )
+            self.page_cursor += 1
+        with open(filename, 'wb') as ostream:
+            self.watermarkedPdfFile.write(ostream)
+        print('Closed!')
+        event.Skip()
 
 
 class App(wx.App):
@@ -270,5 +417,9 @@ if __name__ == '__main__':
     filename = sys.argv[1]
     assert(os.path.isfile(filename))
     assert(os.path.splitext(filename)[1].lower() == '.pdf')
+
+    if not os.path.exists(filename + '.bak'):
+        copyfile(filename, filename + '.bak')
+        print('Created backup file: %s.bak' % filename)
     app = App(filename)
     app.MainLoop()

@@ -1,3 +1,4 @@
 wxPython
 wand
 PyPDF2
+textract
