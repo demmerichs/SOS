@@ -20,9 +20,9 @@ Use `ocrmypdf` command line tool on Linux. A script for applying it to all pdf f
 Use the app in this repo to iterate in a fast and efficient, yet manual way, over the pdf files to sort away the single pdf pages into directories and/or appending them to existing documents. More information about this tool will be provided in the beginning of this README.
 
 ## TODOs
-[x] include correct languages for the ocr step (german and english)
-[x] use the ocr text in the last step instead of reprocessing the image again
-[ ] add more SOS specific information at the beginning of this README
-[x] watermark processed pages
-[ ] create script managing all 5 steps in one go
-[x] use dates and page up page down keys in filename creation
+- [x] include correct languages for the ocr step (german and english)
+- [x] use the ocr text in the last step instead of reprocessing the image again
+- [ ] add more SOS specific information at the beginning of this README
+- [x] watermark processed pages
+- [ ] create script managing all 5 steps in one go
+- [x] use dates and page up page down keys in filename creation
