@@ -6,7 +6,7 @@ if [ -d "$DIR/venv" ]
 then
     :
 else
-    virtualenv $DIR/venv -p python3
+    python3 -m venv $DIR/venv --prompt SOS
 fi
 
 source $DIR/venv/bin/activate
