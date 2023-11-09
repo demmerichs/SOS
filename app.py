@@ -39,11 +39,9 @@ def insensitive_glob(pattern):
 
 def start_match_len(str_a, str_b):
     if len(str_a) * len(str_b) == 0:
-        return 1
+        return 0
     if len(str_a) > len(str_b):
         return start_match_len(str_b, str_a)
-    str_a = str_a.lower()
-    str_b = str_b.lower()
     count = 0
     while str_a[count] == str_b[count]:
         count += 1
