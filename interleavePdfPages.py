@@ -46,7 +46,6 @@ if __name__ == '__main__':
         ROOT_PATH = Path.home() / "Documents/SOS"
         raw_scans = ROOT_PATH / "01_raw_scans"
         merged_scans = ROOT_PATH / "02_merged_scans"
-        import pdb; pdb.set_trace()
         for fname_front in raw_scans.glob("*_f.pdf"):
             base_name = fname_front.name.replace("_f.pdf", "")
             fname_back = fname_front.parent / (base_name + "_b.pdf")
