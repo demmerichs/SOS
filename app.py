@@ -430,8 +430,9 @@ if __name__ == '__main__':
     assert(os.path.isfile(filename))
     assert(os.path.splitext(filename)[1].lower() == '.pdf')
 
-    if not os.path.exists(filename + '.bak'):
-        copyfile(filename, filename + '.bak')
-        print('Created backup file: %s.bak' % filename)
+    bak_fname = os.path.splitext(filename)[0] + '.bak' + os.path.splitext(filename)[1]
+    if not os.path.exists(bak_fname):
+        copyfile(filename, bak_fname)
+        print('Created backup file: %s' % bak_fname)
     app = App(filename)
     app.MainLoop()
