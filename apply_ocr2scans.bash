@@ -7,5 +7,9 @@ ROOTDIR=~/Documents/SOS
 for f in $ROOTDIR/02_merged_scans/*.pdf
 do
     filename=$(basename -- "$f")
+    if [ -f $ROOTDIR/03_ocr_scans/$filename ]
+    then
+        continue
+    fi
     $OCRCMD $f $ROOTDIR/03_ocr_scans/$filename
 done

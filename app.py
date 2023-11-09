@@ -11,6 +11,7 @@ from PyPDF2 import PdfReader, PdfWriter
 import re
 import textract
 from shutil import copyfile
+from pathlib import Path
 
 
 script_path = os.path.dirname(os.path.realpath(__file__))
@@ -428,14 +429,26 @@ class App(wx.App):
 
 
 if __name__ == '__main__':
-    assert(len(sys.argv) == 2)
-    filename = sys.argv[1]
-    assert(os.path.isfile(filename))
-    assert(os.path.splitext(filename)[1].lower() == '.pdf')
+    assert(len(sys.argv) >= 2)
 
-    bak_fname = os.path.splitext(filename)[0] + '.bak' + os.path.splitext(filename)[1]
-    if not os.path.exists(bak_fname):
-        copyfile(filename, bak_fname)
-        print('Created backup file: %s' % bak_fname)
-    app = App(filename)
-    app.MainLoop()
+    if len(sys.argv) == 2 and os.path.isdir(sys.argv[1]):
+        filenames = []
+        for fname in Path(sys.argv[1]).glob("*.pdf"):
+            if fname.name[-8:] == '.bak.pdf':
+                continue
+            if (fname.parent / (fname.name[:-4] + '.bak.pdf')).exists():
+                continue
+            filenames.append(str(fname))
+    else:
+        filenames = sys.argv[1:]
+
+    for filename in filenames:
+        assert(os.path.isfile(filename))
+        assert(os.path.splitext(filename)[1].lower() == '.pdf')
+
+        bak_fname = os.path.splitext(filename)[0] + '.bak' + os.path.splitext(filename)[1]
+        if not os.path.exists(bak_fname):
+            copyfile(filename, bak_fname)
+            print('Created backup file: %s' % bak_fname)
+        app = App(filename)
+        app.MainLoop()
