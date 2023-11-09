@@ -140,7 +140,12 @@ class Frame(wx.Frame):
             (size[0] + 2*self.inter_space + self.col_width, size[1])
         )
 
-        self.OnEnterPress(None)
+        self.InitTextField()
+
+    def InitTextField(self):
+        self.control.SetValue(self.GetHistoryEstimate())
+        wx.CallLater(1, self.control.SetInsertionPointEnd)
+        self.UpdateView()
 
     def GetCurrentBitmap(self):
         if len(self.pdfFile.pages) == self.page_cursor:
@@ -330,17 +335,13 @@ class Frame(wx.Frame):
                 if self.control.GetValue() != '':
                     self.history.append(self.control.GetValue())
                 self.WriteHistory()
-                self.control.SetValue(self.GetHistoryEstimate())
-                wx.CallLater(1, self.control.SetInsertionPointEnd)
-                self.UpdateView()
+                self.InitTextField()
 
     def OnDeletePress(self, event):
         self.history_cursor = -1
         if event is not None:
             self.ProcessPage()
-            self.control.SetValue(self.GetHistoryEstimate())
-            wx.CallLater(1, self.control.SetInsertionPointEnd)
-            self.UpdateView()
+            self.InitTextField()
 
     def OnBackPress(self, event):
         if self.control.GetInsertionPoint() != self.control.GetLastPosition():
