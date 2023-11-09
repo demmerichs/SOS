@@ -357,7 +357,11 @@ class Frame(wx.Frame):
     def OnTabPress(self, event):
         new_path = self.GetPossibleFilesystemObjects(
             self.control.GetValue()
-        )[0]
+        )
+        if len(new_path) == 0:
+            return
+        else:
+            new_path = new_path[0]
         if os.path.isfile(get_abs_path(new_path)):
             self.control.SetValue(new_path)
         elif os.path.isdir(get_abs_path(new_path)):
