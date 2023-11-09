@@ -7,14 +7,14 @@ from io import BytesIO
 from glob import glob
 import os
 import sys
-from PyPDF2 import PdfFileReader, PdfFileWriter
+from PyPDF2 import PdfReader, PdfWriter
 import re
 import textract
 from shutil import copyfile
 
 
 script_path = os.path.dirname(os.path.realpath(__file__))
-watermarkPdf = PdfFileReader(
+watermarkPdf = PdfReader(
     open(os.path.join(script_path, "sos_watermark.pdf"), "rb")
 )
 
@@ -103,14 +103,14 @@ class Frame(wx.Frame):
         self.col_width = 850
         self.inter_space = 10
         self.line_height = 30
-        self.pdfFile = PdfFileReader(filename, 'r')
-        self.watermarkedPdfFile = PdfFileWriter()
+        self.pdfFile = PdfReader(filename, 'r')
+        self.watermarkedPdfFile = PdfWriter()
 
         extracttext = textract.process(filename).decode('utf-8')
         self.page_texts = extracttext.split('\f')
         assert len(self.page_texts[-1]) == 0
         self.page_texts = self.page_texts[:-1]
-        assert len(self.page_texts) == self.pdfFile.getNumPages()
+        assert len(self.page_texts) == len(self.pdfFile.pages)
 
         self.LoadHistory()
         temp = self.GetCurrentBitmap()
@@ -143,7 +143,7 @@ class Frame(wx.Frame):
         self.OnEnterPress(None)
 
     def GetCurrentBitmap(self):
-        if self.pdfFile.getNumPages() == self.page_cursor:
+        if len(self.pdfFile.pages) == self.page_cursor:
             self.Close()
             return None
         with BytesIO() as bytesio:
@@ -296,20 +296,20 @@ class Frame(wx.Frame):
         wx.CallLater(1, self.control.SetInsertionPointEnd)
 
     def ProcessPage(self):
-        cur_page = self.pdfFile.getPage(self.page_cursor)
+        cur_page = self.pdfFile.pages[self.page_cursor]
         if os.path.splitext(self.control.GetValue())[1] == '.pdf':
             abs_path = get_abs_path(self.control.GetValue())
-            new = PdfFileWriter()
+            new = PdfWriter()
             if os.path.isfile(abs_path):
-                old = PdfFileReader(abs_path, 'r')
-                for i in range(old.getNumPages()):
-                    new.addPage(old.getPage(i))
-            new.addPage(cur_page)
+                old = PdfReader(abs_path, 'r')
+                for i in range(len(old.pages)):
+                    new.add_page(old.pages[i])
+            new.add_page(cur_page)
             os.makedirs(os.path.dirname(abs_path), exist_ok=True)
             with open(abs_path, 'wb') as f:
                 new.write(f)
-            cur_page.mergePage(watermarkPdf.getPage(0))
-        self.watermarkedPdfFile.addPage(cur_page)
+            cur_page.merge_page(watermarkPdf.pages[0])
+        self.watermarkedPdfFile.add_page(cur_page)
         self.page_cursor += 1
         if self.GetCurrentBitmap() is not None:
             self.bmp.SetBitmap(self.GetCurrentBitmap())
@@ -389,9 +389,9 @@ class Frame(wx.Frame):
 
     def OnClose(self, event):
         print('Finishung up and closing app...')
-        while self.page_cursor < self.pdfFile.getNumPages():
-            self.watermarkedPdfFile.addPage(
-                self.pdfFile.getPage(self.page_cursor)
+        while self.page_cursor < len(self.pdfFile.pages):
+            self.watermarkedPdfFile.add_page(
+                self.pdfFile.pages[self.page_cursor]
             )
             self.page_cursor += 1
         with open(filename, 'wb') as ostream:
