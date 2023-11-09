@@ -298,10 +298,11 @@ class Frame(wx.Frame):
         self.UpdateView()
         wx.CallLater(1, self.control.SetInsertionPointEnd)
 
-    def ProcessPage(self):
+    def ProcessPage(self, fname=None):
         cur_page = self.pdfFile.pages[self.page_cursor]
-        if os.path.splitext(self.control.GetValue())[1] == '.pdf':
-            abs_path = get_abs_path(self.control.GetValue())
+        if fname is not None:
+            assert os.path.splitext(fname)[1] == '.pdf'
+            abs_path = get_abs_path(fname)
             new = PdfWriter()
             if os.path.isfile(abs_path):
                 old = PdfReader(abs_path, 'r')
@@ -320,18 +321,16 @@ class Frame(wx.Frame):
     def OnEnterPress(self, event):
         self.history_cursor = -1
         if event is not None:
-            if (
-                os.path.splitext(self.control.GetValue())[1] == '.pdf' or
-                self.control.GetValue() == ''
-            ):
-                self.ProcessPage()
-            if self.control.GetValue() in self.history:
-                del self.history[self.history.index(self.control.GetValue())]
-            self.history.append(self.control.GetValue())
-        self.WriteHistory()
-        self.control.SetValue(self.GetHistoryEstimate())
-        wx.CallLater(1, self.control.SetInsertionPointEnd)
-        self.UpdateView()
+            if os.path.splitext(self.control.GetValue())[1] == '.pdf':
+                self.ProcessPage(self.control.GetValue())
+                if self.control.GetValue() in self.history:
+                    del self.history[self.history.index(self.control.GetValue())]
+                if self.control.GetValue() != '':
+                    self.history.append(self.control.GetValue())
+                self.WriteHistory()
+                self.control.SetValue(self.GetHistoryEstimate())
+                wx.CallLater(1, self.control.SetInsertionPointEnd)
+                self.UpdateView()
 
     def OnBackPress(self, event):
         if self.control.GetInsertionPoint() != self.control.GetLastPosition():
