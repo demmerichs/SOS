@@ -158,7 +158,10 @@ class Frame(wx.Frame):
         return image.ConvertToBitmap()
 
     def GetTextOCR(self):
-        return self.page_texts[self.page_cursor]
+        if self.page_cursor < len(self.page_texts):
+            return self.page_texts[self.page_cursor]
+        else:
+            return ''
 
     def UpdateView(self):
         possible_objects = self.GetPossibleFilesystemObjects(
