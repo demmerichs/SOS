@@ -232,6 +232,8 @@ class Frame(wx.Frame):
             self.OnPageUpPress(event)
         elif event.GetKeyCode() == wx.WXK_PAGEDOWN:
             self.OnPageDownPress(event)
+        elif event.GetKeyCode() == wx.WXK_DELETE:
+            self.OnDeletePress(event)
         else:
             event.Skip()
 
@@ -331,6 +333,14 @@ class Frame(wx.Frame):
                 self.control.SetValue(self.GetHistoryEstimate())
                 wx.CallLater(1, self.control.SetInsertionPointEnd)
                 self.UpdateView()
+
+    def OnDeletePress(self, event):
+        self.history_cursor = -1
+        if event is not None:
+            self.ProcessPage()
+            self.control.SetValue(self.GetHistoryEstimate())
+            wx.CallLater(1, self.control.SetInsertionPointEnd)
+            self.UpdateView()
 
     def OnBackPress(self, event):
         if self.control.GetInsertionPoint() != self.control.GetLastPosition():
