@@ -149,7 +149,7 @@ class Frame(wx.Frame):
         with BytesIO() as bytesio:
             with WImage(
                 filename='%s[%d]' % (self.filename, self.page_cursor),
-                resolution=60
+                resolution=120
             ) as img:
                 img.format = 'jpg'
                 img.save(file=bytesio)
