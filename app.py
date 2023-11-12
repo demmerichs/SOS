@@ -22,7 +22,9 @@ watermarkPdf = PdfReader(
 
 month_names = [
     'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August',
-    'September', 'Oktober', 'November', 'Dezember'
+    'September', 'Oktober', 'November', 'Dezember',
+    'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December',
 ]
 year_regex = r"((?:19|20|21)\d{2})"
 nbr_month_regex = r"(0?[1-9]|1[0-2])"
@@ -334,7 +336,9 @@ class Frame(wx.Frame):
                 if self.control.GetValue() != '':
                     self.history.append(self.control.GetValue())
                 self.WriteHistory()
-                self.InitTextField()
+            else:
+                self.ProcessPage(self.history[-1])
+            self.InitTextField()
 
     def OnDeletePress(self, event):
         self.history_cursor = -1
@@ -343,6 +347,9 @@ class Frame(wx.Frame):
             self.InitTextField()
 
     def OnBackPress(self, event):
+        if not event.AltDown():
+            event.Skip()
+            return
         if self.control.GetInsertionPoint() != self.control.GetLastPosition():
             event.Skip()
             return
@@ -452,3 +459,4 @@ if __name__ == '__main__':
             print('Created backup file: %s' % bak_fname)
         app = App(filename)
         app.MainLoop()
+        del app
