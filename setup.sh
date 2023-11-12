@@ -12,3 +12,5 @@ fi
 source $DIR/venv/bin/activate
 pip3 install -U pip
 pip3 install -U -r $DIR/requirements.txt
+
+bash make_scan_folders.bash
